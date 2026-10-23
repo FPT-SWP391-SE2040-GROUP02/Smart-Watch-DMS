@@ -1,0 +1,25 @@
+# ==============================================================================
+# Git Ignore - LegacyVault SmartWatch DMS
+# ==============================================================================
+
+# Executables & Binaries
+cloudflared.exe
+*.exe
+
+# Gradle caches & build outputs
+.gradle/
+build/
+**/build/
+!apk/
+!apk/*.apk
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+local.properties
+.DS_Store
+Thumbs.db
+
+# Logs & temp
+*.log
