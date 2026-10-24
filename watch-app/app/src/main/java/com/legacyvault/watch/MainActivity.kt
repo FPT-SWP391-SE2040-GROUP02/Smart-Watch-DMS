@@ -99,6 +99,19 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     private var timerRunnable: Runnable? = null
     private var secondsElapsed = 0
     private var wakeLock: PowerManager.WakeLock? = null
+    private var canCheckInToday = false
+    private var statusRefreshing = false
+    private var isSending = false
+    private var screenActive = false
+    private var stateVersion = 0
+    private var refreshAfterMs = 30_000L
+    private val statusPoll = object : Runnable {
+        override fun run() {
+            if (!screenActive) return
+            refreshDailyStatus()
+            mainHandler.postDelayed(this, refreshAfterMs)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -153,14 +166,16 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
         // 2. Đo nhịp tim thực tế
         btnCheckIn.setOnClickListener {
-            if (!isMeasuring) {
-                startMeasurement()
+            if (!isMeasuring && !isSending) {
+                refreshDailyStatus(startAfterRefresh = true)
             }
         }
 
         // 3. Cơ chế dự phòng ngầm (giữ lâu 2 giây): nếu trong phòng thi/báo cáo cảm biến gặp sự cố
         btnCheckIn.setOnLongClickListener {
-            performSilentBackupCheckIn(76)
+            if (canCheckInToday && !statusRefreshing && !isMeasuring && !isSending) {
+                refreshDailyStatus(backupBpm = 76)
+            }
             true
         }
 
@@ -207,6 +222,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                 if (newUrl.startsWith("http://") || newUrl.startsWith("https://")) {
                     prefs.edit().putString("server_url", newUrl).apply()
                     updateServerDisplay()
+                    unpairDevice()
                     Toast.makeText(this, "Đã cập nhật máy chủ!", Toast.LENGTH_SHORT).show()
                     vibrate(50)
                 } else {
@@ -217,6 +233,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             .setNeutralButton("MẶC ĐỊNH") { _, _ ->
                 prefs.edit().remove("server_url").apply()
                 updateServerDisplay()
+                unpairDevice()
                 Toast.makeText(this, "Đã đặt về Render chính thức!", Toast.LENGTH_SHORT).show()
                 vibrate(50)
             }
@@ -225,17 +242,101 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     }
 
     private fun updateViewState() {
+        canCheckInToday = false
+        btnCheckIn.isEnabled = false
         if (authToken.isNotEmpty()) {
             layoutUnpaired.visibility = View.GONE
             layoutPaired.visibility = View.VISIBLE
             val display = if (ownerEmail.isNotEmpty()) ownerEmail.substringBefore("@") else "Chủ kho"
             tvOwnerEmail.text = "👤 $display"
-            tvStatus.text = "Sẵn sàng đo nhịp tim"
+            tvStatus.text = "Đang kiểm tra trạng thái điểm danh..."
+            refreshDailyStatus()
         } else {
             layoutUnpaired.visibility = View.VISIBLE
             layoutPaired.visibility = View.GONE
             etPairCode.setText("")
             tvPairGuide.text = "Lấy mã 6 số tại Web Dashboard"
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        screenActive = true
+        mainHandler.removeCallbacks(statusPoll)
+        mainHandler.post(statusPoll)
+    }
+
+    override fun onPause() {
+        screenActive = false
+        stateVersion++
+        statusRefreshing = false
+        canCheckInToday = false
+        btnCheckIn.isEnabled = false
+        mainHandler.removeCallbacks(statusPoll)
+        stopMeasurement()
+        super.onPause()
+    }
+
+    private fun applyDailyStatus(json: JSONObject) {
+        val last = if (json.isNull("lastCheckInAt")) null else json.getString("lastCheckInAt")
+        val state = DailyCheckInState.from(json.getString("serverTime"), last, json.getString("planStatus"))
+        canCheckInToday = state.canCheckIn
+        refreshAfterMs = state.refreshAfterMs
+        btnCheckIn.isEnabled = canCheckInToday && !isMeasuring && !isSending
+        btnCheckIn.text = if (state.checkedInToday) "ĐÃ ĐIỂM DANH HÔM NAY" else "💓 ĐIỂM DANH"
+        tvStatus.text = when {
+            state.checkedInToday -> "Đã điểm danh hôm nay.\nMở lại từ 00:00 ngày tiếp theo (giờ Việt Nam)."
+            !state.canCheckIn -> "Kế hoạch hiện không cho phép điểm danh."
+            else -> "Sẵn sàng đo nhịp tim"
+        }
+        mainHandler.removeCallbacks(statusPoll)
+        if (screenActive) mainHandler.postDelayed(statusPoll, refreshAfterMs)
+    }
+
+    private fun refreshDailyStatus(startAfterRefresh: Boolean = false, backupBpm: Int? = null) {
+        if (!screenActive || authToken.isEmpty() || statusRefreshing || isMeasuring || isSending) return
+        statusRefreshing = true
+        btnCheckIn.isEnabled = false
+        val token = authToken
+        val server = getBaseUrl()
+        val version = stateVersion
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val request = Request.Builder().url("$server/api/v1/check-ins/me")
+                    .addHeader("Authorization", "Bearer $token").build()
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    runOnUiThread {
+                        if (!screenActive || version != stateVersion || token != authToken || server != getBaseUrl()) return@runOnUiThread
+                        statusRefreshing = false
+                        if (response.code == 401) {
+                            unpairDevice()
+                            Toast.makeText(this@MainActivity, "Phiên hết hạn. Hãy ghép nối lại.", Toast.LENGTH_LONG).show()
+                        } else if (response.isSuccessful) {
+                            try {
+                                applyDailyStatus(JSONObject(body))
+                                if (canCheckInToday && startAfterRefresh) startMeasurement()
+                                else if (canCheckInToday && backupBpm != null) performSilentBackupCheckIn(backupBpm)
+                            } catch (_: Exception) {
+                                canCheckInToday = false
+                                btnCheckIn.isEnabled = false
+                                tvStatus.text = "Không đọc được trạng thái. Hệ thống sẽ thử lại."
+                            }
+                        } else {
+                            canCheckInToday = false
+                            tvStatus.text = "Chưa đọc được trạng thái (${response.code}). Đang chờ thử lại."
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                runOnUiThread {
+                    if (version != stateVersion || token != authToken || server != getBaseUrl()) return@runOnUiThread
+                    statusRefreshing = false
+                    canCheckInToday = false
+                    btnCheckIn.isEnabled = false
+                    tvStatus.text = "Không kết nối được máy chủ. Đang chờ thử lại."
+                }
+            }
         }
     }
 
@@ -291,7 +392,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
                 val response = client.newCall(request).execute()
                 val responseBody = response.body?.string() ?: ""
-                Log.d(tag, "pairWithCode HTTP ${response.code}: $responseBody")
+                response.close()
 
                 if (response.isSuccessful) {
                     val json = JSONObject(responseBody)
@@ -338,6 +439,8 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     }
 
     private fun unpairDevice() {
+        stateVersion++
+        statusRefreshing = false
         authToken = ""
         ownerEmail = ""
         prefs.edit().remove("auth_token").remove("owner_email").apply()
@@ -348,6 +451,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     }
 
     private fun startMeasurement() {
+        if (!canCheckInToday || isSending || !screenActive) return
         isMeasuring = true
         btnCheckIn.isEnabled = false
         tvStatus.text = "Đang bắt mạch cổ tay...\nXin giữ yên đồng hồ (0s)"
@@ -428,13 +532,20 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     }
 
     private fun performSilentBackupCheckIn(backupBpm: Int) {
-        if (authToken.isEmpty()) return
+        if (authToken.isEmpty() || !canCheckInToday || isSending) return
         vibrate(80)
         tvStatus.text = "Đang kích hoạt điểm danh khẩn cấp..."
         sendCheckIn(backupBpm)
     }
 
     private fun sendCheckIn(bpm: Int) {
+        if (!canCheckInToday || isSending || !screenActive) return
+        isSending = true
+        btnCheckIn.isEnabled = false
+        stateVersion++
+        val version = stateVersion
+        val token = authToken
+        val targetUrl = getCheckInUrl()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val jsonPayload = """
@@ -446,37 +557,43 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                     }
                 """.trimIndent()
 
-                val targetUrl = getCheckInUrl()
                 val request = Request.Builder()
                     .url(targetUrl)
-                    .addHeader("Authorization", "Bearer $authToken")
+                    .addHeader("Authorization", "Bearer $token")
                     .post(jsonPayload.toRequestBody("application/json".toMediaType()))
                     .build()
 
                 val response = client.newCall(request).execute()
                 val responseBody = response.body?.string() ?: ""
-                Log.d(tag, "sendCheckIn HTTP ${response.code}: $responseBody")
+                response.close()
+                val checkedStatus = if (response.isSuccessful) JSONObject(responseBody) else null
 
                 runOnUiThread {
-                    btnCheckIn.isEnabled = true
+                    isSending = false
+                    if (!screenActive || version != stateVersion || token != authToken || targetUrl != getCheckInUrl()) return@runOnUiThread
                     if (response.isSuccessful) {
-                        tvStatus.text = "✅ ĐIỂM DANH THÀNH CÔNG!\n($bpm bpm)"
+                        applyDailyStatus(checkNotNull(checkedStatus))
                         celebrateVibrate()
-                        Toast.makeText(this@MainActivity, "Điểm danh DMS thành công!", Toast.LENGTH_LONG).show()
                     } else if (response.code == 401) {
                         tvStatus.text = "❌ Phiên đã hết hạn.\nVui lòng ghép nối lại!"
                         unpairDevice()
                         vibrate(300)
                     } else {
+                        canCheckInToday = false
                         tvStatus.text = "❌ Lỗi máy chủ (${response.code})"
+                        refreshDailyStatus()
                         vibrate(200)
                     }
                 }
             } catch (e: Exception) {
                 Log.e(tag, "sendCheckIn exception", e)
                 runOnUiThread {
-                    btnCheckIn.isEnabled = true
+                    isSending = false
+                    if (version != stateVersion || token != authToken) return@runOnUiThread
+                    canCheckInToday = false
+                    btnCheckIn.isEnabled = false
                     tvStatus.text = "❌ Lỗi mạng. Nhấp URL để đổi máy chủ."
+                    refreshDailyStatus()
                     vibrate(200)
                 }
             }
