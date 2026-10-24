@@ -192,7 +192,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         } catch (_: Exception) {
             url
         }
-        tvServerUrl.text = "🌐 $host"
+        tvServerUrl.text = host
     }
 
     private fun showServerConfigDialog() {
@@ -248,7 +248,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             layoutUnpaired.visibility = View.GONE
             layoutPaired.visibility = View.VISIBLE
             val display = if (ownerEmail.isNotEmpty()) ownerEmail.substringBefore("@") else "Chủ kho"
-            tvOwnerEmail.text = "👤 $display"
+            tvOwnerEmail.text = display
             tvStatus.text = "Đang kiểm tra trạng thái điểm danh..."
             refreshDailyStatus()
         } else {
@@ -283,7 +283,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         canCheckInToday = state.canCheckIn
         refreshAfterMs = state.refreshAfterMs
         btnCheckIn.isEnabled = canCheckInToday && !isMeasuring && !isSending
-        btnCheckIn.text = if (state.checkedInToday) "ĐÃ ĐIỂM DANH HÔM NAY" else "💓 ĐIỂM DANH"
+        btnCheckIn.text = if (state.checkedInToday) "ĐÃ ĐIỂM DANH HÔM NAY" else "ĐIỂM DANH"
         tvStatus.text = when {
             state.checkedInToday -> "Đã điểm danh hôm nay.\nMở lại từ 00:00 ngày tiếp theo (giờ Việt Nam)."
             !state.canCheckIn -> "Kế hoạch hiện không cho phép điểm danh."
