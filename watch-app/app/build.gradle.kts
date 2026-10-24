@@ -16,6 +16,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".local"
+            versionNameSuffix = "-local"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -34,6 +38,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
     implementation("androidx.percentlayout:percentlayout:1.0.0")

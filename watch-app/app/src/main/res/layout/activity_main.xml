@@ -32,7 +32,7 @@
             android:ellipsize="middle"
             android:singleLine="true"
             android:gravity="center"
-            android:text="🌐 Máy chủ: Đang tải..."
+            android:text="Máy chủ: Đang tải..."
             android:textColor="#7DAFA0"
             android:textSize="9sp" />
 
@@ -49,7 +49,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="🔗 Ghép nối đồng hồ"
+                android:text="Ghép nối đồng hồ"
                 android:textColor="#85E5B8"
                 android:textSize="11sp"
                 android:textStyle="bold" />
@@ -107,7 +107,7 @@
                 android:layout_marginTop="4dp"
                 android:ellipsize="middle"
                 android:singleLine="true"
-                android:text="👤 Chủ kho"
+                android:text="Chủ kho"
                 android:textColor="#85E5B8"
                 android:textSize="10sp" />
 
@@ -128,7 +128,7 @@
                 android:layout_height="46dp"
                 android:layout_marginTop="8dp"
                 android:backgroundTint="#E0C486"
-                android:text="💓 ĐIỂM DANH"
+                android:text="ĐIỂM DANH"
                 android:textColor="#0A281E"
                 android:textSize="11sp"
                 android:textStyle="bold" />

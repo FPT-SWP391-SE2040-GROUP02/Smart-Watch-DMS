@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Logo LegacyVault (cùng hình với favicon web): ba vòm cổng lồng nhau và cánh cửa vàng ở giữa.
+         Gốc tọa độ 120x120 được thu nhỏ 0.6 và đặt giữa để nằm trong vùng an toàn của icon. -->
+    <group
+        android:scaleX="0.6"
+        android:scaleY="0.6"
+        android:translateX="18"
+        android:translateY="18">
+
+        <path
+            android:pathData="M22,108 L22,50 A38,38 0 0,1 98,50 L98,108"
+            android:strokeColor="#EFECE3"
+            android:strokeWidth="5"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M31,108 L31,59 A29,29 0 0,1 89,59 L89,108"
+            android:strokeColor="#EFECE3"
+            android:strokeWidth="5"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M40,108 L40,68 A20,20 0 0,1 80,68 L80,108"
+            android:strokeColor="#EFECE3"
+            android:strokeWidth="5"
+            android:strokeLineJoin="round" />
+        <path
+            android:fillColor="#B68F4C"
+            android:pathData="M49,108 L49,77 A11,11 0 0,1 71,77 L71,108 Z" />
+    </group>
+</vector>
