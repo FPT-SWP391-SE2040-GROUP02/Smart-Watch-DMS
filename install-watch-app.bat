@@ -24,11 +24,19 @@ if not exist "%ADB_PATH%" (
 set WATCH_IP=192.168.1.236:5555
 set /p custom_ip="Nhap IP Galaxy Watch [Mac dinh: %WATCH_IP%]: "
 if not "%custom_ip%"=="" set WATCH_IP=%custom_ip%
+rem Neu chi nhap IP khong co port, adb dung port mac dinh 5555
+echo %WATCH_IP% | findstr /C:":" >nul
+if errorlevel 1 set WATCH_IP=%WATCH_IP%:5555
 
 echo.
 echo [1/3] Dang ket noi toi Galaxy Watch tai %WATCH_IP%...
 "%ADB_PATH%" connect %WATCH_IP%
 "%ADB_PATH%" devices
+if errorlevel 1 (
+    echo [LOI] Khong liiet ke duoc thiet bi! Kiem tra lai duong dan adb.exe.
+    pause
+    exit /b 1
+)
 
 echo.
 echo [2/3] Kiem tra file APK...
@@ -50,8 +58,19 @@ if not exist "%APK_PATH%" (
 )
 
 echo.
-echo [3/3] Dang cai dat app-debug.apk len Galaxy Watch...
-"%ADB_PATH%" install -r "%APK_PATH%"
+echo [3/3] Dang cai dat app-debug.apk len Galaxy Watch (thiet bi %WATCH_IP%)...
+"%ADB_PATH%" -s %WATCH_IP% install -r "%APK_PATH%"
+if errorlevel 1 (
+    echo [LOI] Cai dat that bai - co the do xung dot chu ky voi ban cu.
+    echo Dang giong du lieu va cai lai tu dau (uninstall + install)...
+    "%ADB_PATH%" -s %WATCH_IP% uninstall com.legacyvault.watch
+    "%ADB_PATH%" -s %WATCH_IP% install -r "%APK_PATH%"
+    if errorlevel 1 (
+        echo [LOI] Van that bai! Kiem tra dong ho van ket noi (adb devices) va thu lai.
+        pause
+        exit /b 1
+    )
+)
 
 echo.
 echo =====================================================================
