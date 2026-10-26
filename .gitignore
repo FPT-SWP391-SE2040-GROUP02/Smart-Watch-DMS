@@ -5,6 +5,7 @@
 # Executables & Binaries
 cloudflared.exe
 *.exe
+platform-tools-latest-windows/
 
 # Gradle caches & build outputs
 .gradle/
